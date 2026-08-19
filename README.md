@@ -109,19 +109,35 @@ python longcat2_ptq/export_only.py \
   --export "$EXPORT"
 ```
 
-## ModelOpt patches (applied automatically)
+## The two ModelOpt changes (how users get them)
 
-0.41.0 does not include PR #785. We do not fork upstream. The scripts
-monkeypatch just before `hf_ptq`:
+Install the **stock** NVIDIA stack only (`nvidia-modelopt==0.41.0` and
+`Model-Optimizer` tag `0.41.0`). Do **not** look for a forked ModelOpt wheel.
 
-1. Backport PR #785: lazy-calibrate missing weight `_amax` for dead experts
-2. Guard `_export_quantized_weight` again
-3. Fill **input** amax only after accelerate hooks are removed (real tensors)
-4. Skip `nn.Identity` zero-experts; do not mark `LongcatFlashMoE` as upstream `is_moe`
+Both changes live in this repo and are applied at runtime when you run
+`scripts/run_ptq.sh` / `run_ptq_smoke.sh` / `export_only.py`:
 
-Do not call `set_expert_quantizer_amax` as a pre-pass. With
-`--use_seq_device_map` many expert weights are still meta and
-`Tensor.item()` raises.
+| # | Change | Why |
+|---|--------|-----|
+| 1 | Backport [PR #785](https://github.com/NVIDIA/Model-Optimizer/pull/785) | 0.41.0 asserts if a dead MoE expert has no weight `_amax`. The patch lazy-calibrates amax from the real weight at export time (same path that unblocked Kimi-K2.5-NVFP4). |
+| 2 | LongCat MoE export timing | Fill **input** amax only after accelerate hooks are removed, skip `nn.Identity` zero-experts, and do **not** flip upstream `is_moe(LongcatFlashMoE)`. A pre-pass `set_expert_quantizer_amax` on meta weights raises `Tensor.item()`. |
+
+Source: [`longcat2_ptq/patch_modelopt_export.py`](longcat2_ptq/patch_modelopt_export.py).
+`run_ptq.sh` imports it and calls `apply_longcat_modelopt_export_patches()` in the
+same process as `hf_ptq.py`.
+
+If you invoke `hf_ptq.py` yourself, load the patch first:
+
+```bash
+export PYTHONPATH=/path/to/longcat2-nvfp4-ptq/longcat2_ptq:$PYTHONPATH
+python - <<'PY'
+from patch_modelopt_export import apply_longcat_modelopt_export_patches
+apply_longcat_modelopt_export_patches()
+import runpy, sys
+sys.argv = ["hf_ptq.py", "--model", "...", "--recipe", "...", "--export_path", "...", "--trust_remote_code"]
+runpy.run_path("/path/to/Model-Optimizer/examples/llm_ptq/hf_ptq.py", run_name="__main__")
+PY
+```
 
 ## Layout
 
