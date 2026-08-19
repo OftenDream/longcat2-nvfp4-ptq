@@ -9,10 +9,7 @@
 #   Multi-GPU Blackwell node(s); keep weights on a large disk (HF_HOME).
 #
 # Example:
-#   export HF_HOME=/home/runner/.cache/huggingface
-#   bash longcat2_ptq/run_ptq.sh \
-#     --src $HF_HOME/hub/models--meituan-longcat--LongCat-2.0/snapshots/<rev> \
-#     --export $HF_HOME/longcat-2.0-nvfp4
+#   bash scripts/run_ptq.sh --src /data/LongCat-2.0 --export /data/longcat-2.0-nvfp4
 
 set -euo pipefail
 

@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 LightSeek Foundation
 #
-# Install ModelOpt 0.41.0 + clone Model-Optimizer tag 0.41.0 onto persistent
-# scratch (container: /home/runner/.cache). Safe to re-run.
+# Install the supported ModelOpt stack on this machine:
+#   nvidia-modelopt[hf]==0.41.0
+#   Model-Optimizer tag 0.41.0 (hf_ptq.py)
+#
+# Safe to re-run. Override locations with CACHE / VENV / MODELOPT_HOME.
 
 set -euo pipefail
 
@@ -33,5 +36,6 @@ print("hf_ptq OK")
 PY
 
 echo "Installed:"
-echo "  venv           ${VENV}"
+echo "  venv            ${VENV}"
 echo "  Model-Optimizer ${MODELOPT_HOME}"
+echo "Activate with:  source ${VENV}/bin/activate"
