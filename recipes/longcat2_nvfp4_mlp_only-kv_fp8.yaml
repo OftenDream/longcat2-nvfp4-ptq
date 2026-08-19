@@ -1,0 +1,78 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 LightSeek Foundation
+# SPDX-License-Identifier: Apache-2.0
+#
+# LongCat-2.0 PTQ recipe mirroring nvidia/Kimi-K2.5-NVFP4:
+#   - NVFP4 W4A4 on dense MLPs (mlps.*) + MoE experts (mlp.experts.*)
+#   - FP8 KV cache
+#   - Keep attention / DSA indexer / OE projections / router / lm_head in BF16
+#
+# Derived from ModelOpt general/ptq/nvfp4_mlp_only-kv_fp8 with LongCat-specific
+# disable rules. Module names verified against meituan-longcat/LongCat-2.0
+# safetensors keys:
+#   model.layers.*.mlps.*.{gate,up,down}_proj
+#   model.layers.*.mlp.experts.*.{gate,up,down}_proj
+#   model.layers.*.mlp.router.classifier          (exclude)
+#   model.layers.*.self_attn.*.{q,kv,o}_*         (exclude)
+#   model.layers.*.self_attn.0.indexer.*          (exclude)
+#   model.oe_embed_tokens* / model.oe_embed_proj* (exclude)
+
+imports:
+  base_disable_all: configs/ptq/units/base_disable_all
+  default_disabled_quantizers: configs/ptq/units/default_disabled_quantizers
+  nvfp4: configs/numerics/nvfp4
+  kv_fp8: configs/ptq/units/kv_fp8
+
+metadata:
+  recipe_type: ptq
+  description: >-
+    LongCat-2.0: dynamic NVFP4 on ScMoE experts + shortcut dense MLPs, FP8 KV;
+    attention/DSA indexer/OE/router/lm_head stay unquantized.
+
+quantize:
+  algorithm: max
+  quant_cfg:
+    - $import: base_disable_all
+    # Dense shortcut MLPs: model.layers.*.mlps.*
+    - quantizer_name: '*mlps*weight_quantizer'
+      cfg:
+        $import: nvfp4
+    - quantizer_name: '*mlps*input_quantizer'
+      cfg:
+        $import: nvfp4
+    # Also match generic *mlp* for MoE container + expert linears.
+    - quantizer_name: '*mlp*weight_quantizer'
+      cfg:
+        $import: nvfp4
+    - quantizer_name: '*mlp*input_quantizer'
+      cfg:
+        $import: nvfp4
+    - quantizer_name: '*block_sparse_moe*weight_quantizer'
+      cfg:
+        $import: nvfp4
+    - quantizer_name: '*block_sparse_moe*input_quantizer'
+      cfg:
+        $import: nvfp4
+    - quantizer_name: '*.experts.*weight_quantizer'
+      cfg:
+        $import: nvfp4
+    - quantizer_name: '*.experts.*input_quantizer'
+      cfg:
+        $import: nvfp4
+    - $import: kv_fp8
+    - $import: default_disabled_quantizers
+    # LongCat-specific excludes (later rules win).
+    - quantizer_name: '*self_attn*'
+      enable: false
+    - quantizer_name: '*indexer*'
+      enable: false
+    - quantizer_name: '*router*'
+      enable: false
+    - quantizer_name: '*oe_embed*'
+      enable: false
+    - quantizer_name: '*embed_tokens*'
+      enable: false
+    - quantizer_name: '*lm_head*'
+      enable: false
+    # MTP usually ignored on load for PTQ; keep disabled if present.
+    - quantizer_name: '*mtp*'
+      enable: false
